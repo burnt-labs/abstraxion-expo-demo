@@ -17,6 +17,7 @@
   "dependencies": {
     "@burnt-labs/abstraxion-react-native": "^1.0.0-alpha.0",
     "@expo/vector-icons": "^14.0.2",
+    "@opacity-labs/react-native-opacity": "^5.2.22",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",

@@ -4,6 +4,7 @@ import {
   useAbstraxionAccount,
   useAbstraxionSigningClient,
 } from "@burnt-labs/abstraxion-react-native";
+import {SpotifyProfile} from "@/components/SpotifyProfile";
 
 export default function Index() {
   // Abstraxion hooks
@@ -87,6 +88,7 @@ export default function Index() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Abstraxion React-Native Demo</Text>
+      <SpotifyProfile />
       {isConnected ? (
         <>
           <TouchableOpacity
