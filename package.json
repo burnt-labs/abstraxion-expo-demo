@@ -18,6 +18,7 @@
     "@burnt-labs/abstraxion-react-native": "^1.0.0-alpha.0",
     "@cosmjs/cosmwasm-stargate": "^0.33.1",
     "@expo/vector-icons": "^14.1.0",
+    "@opacity-labs/react-native-opacity": "^5.6.2",
     "@react-native-async-storage/async-storage": "^2.1.2",
     "@react-navigation/bottom-tabs": "^7.2.0",
     "@react-navigation/native": "^7.0.14",

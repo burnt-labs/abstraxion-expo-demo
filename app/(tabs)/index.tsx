@@ -6,6 +6,7 @@ import {
   useAbstraxionClient,
 } from "@burnt-labs/abstraxion-react-native";
 import type { ExecuteResult } from "@cosmjs/cosmwasm-stargate";
+import {GithubProfile} from "@/components/GithubProfile";
 
 if (!process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS) {
   throw new Error("EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS is not set in your environment file");
@@ -27,7 +28,7 @@ const retryOperation = async <T>(
   delay = 1000
 ): Promise<T> => {
   let lastError: Error | null = null;
-  
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await operation();
@@ -39,7 +40,7 @@ const retryOperation = async <T>(
       }
     }
   }
-  
+
   throw lastError;
 };
 
@@ -71,12 +72,12 @@ export default function Index() {
         try {
           const response = await retryOperation(async () => {
             return await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
-              get_value_by_user: { 
-                address: account.bech32Address 
+              get_value_by_user: {
+                address: account.bech32Address
               }
             });
           });
-          
+
           if (response && typeof response === 'string') {
             setJsonInput(response);
           } else {
@@ -176,8 +177,8 @@ export default function Index() {
     setShowValueByUserForm(false);
     try {
       if (!queryClient) throw new Error("Query client is not defined");
-      const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { 
-        get_value_by_user: { address } 
+      const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
+        get_value_by_user: { address }
       });
       setQueryResult({ value: response });
       setSelectedAddress(address);
@@ -225,7 +226,7 @@ export default function Index() {
     setIsTransactionPending(true);
     try {
       if (!client || !account) throw new Error("Client or account not defined");
-      
+
       // Check balance before proceeding
       const currentBalance = await queryClient?.getBalance(account.bech32Address, "uxion");
       if (!currentBalance || Number(currentBalance.amount) < 184) {
@@ -251,34 +252,34 @@ export default function Index() {
           "auto"
         );
       });
-      
+
       setExecuteResult(res);
       console.log("Transaction successful:", res);
-      
+
       // Show success confirmation
       Alert.alert(
         "Success",
         "Your JSON data has been successfully updated on the blockchain.",
         [{ text: "OK" }]
       );
-      
+
       // Refresh data with retry
       const updatedData = await retryOperation(async () => {
         if (!queryClient) throw new Error("Query client not available");
         return await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
-          get_value_by_user: { 
-            address: account.bech32Address 
+          get_value_by_user: {
+            address: account.bech32Address
           }
         });
       });
-      
+
       if (updatedData && typeof updatedData === 'string') {
         setJsonInput(updatedData);
       }
     } catch (error) {
       console.error("Error executing transaction:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      
+
       // Handle specific error cases
       if (errorMessage.includes("insufficient funds")) {
         Alert.alert(
@@ -313,11 +314,12 @@ export default function Index() {
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
     >
       <Text style={styles.title}>User Map Dapp</Text>
+        <GithubProfile />
 
       {!isConnected ? (
         <View style={styles.connectButtonContainer}>

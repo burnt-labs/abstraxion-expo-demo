@@ -34,7 +34,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "@opacity-labs/react-native-opacity"
     ],
     "experiments": {
       "typedRoutes": true
