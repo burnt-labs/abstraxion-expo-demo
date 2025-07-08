@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { View, StyleSheet, Text, TouchableOpacity, Alert, ScrollView, Clipboard, Linking } from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ScrollView, Clipboard, Linking, TextInput, ActivityIndicator } from "react-native";
 import {
   useAbstraxionAccount,
   useAbstraxionSigningClient,
@@ -444,7 +444,14 @@ export default function Index() {
                     style={[styles.menuButton, (loading || isOperationInProgress || !!jsonError || isTransactionPending) && styles.disabledButton]}
                     disabled={loading || isOperationInProgress || !!jsonError || isTransactionPending}
                   >
-                    <Text style={styles.buttonText}>Submit JSON</Text>
+                    {isTransactionPending ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={[styles.buttonText, styles.loadingText]}>Submitting...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.buttonText}>Submit JSON</Text>
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleFormatJson}
@@ -760,5 +767,17 @@ const styles = StyleSheet.create({
   emptyStateSubText: {
     fontSize: 14,
     color: '#888',
+  },
+  disabledButton: {
+    backgroundColor: '#ccc',
+    opacity: 0.7,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginLeft: 8,
   },
 });
