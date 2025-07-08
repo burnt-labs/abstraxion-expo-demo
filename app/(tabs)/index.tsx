@@ -64,39 +64,6 @@ export default function Index() {
   const [activeView, setActiveView] = useState<string>("updateJson");
   const [balance, setBalance] = useState<string>("0");
 
-  // Add effect to fetch user's JSON data when they log in
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (account?.bech32Address && queryClient) {
-        try {
-          const response = await retryOperation(async () => {
-            return await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
-              get_value_by_user: { 
-                address: account.bech32Address 
-              }
-            });
-          });
-          
-          if (response && typeof response === 'string') {
-            setJsonInput(response);
-          } else {
-            console.log("No existing data found for user");
-            setJsonInput("{}");
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-          Alert.alert(
-            "Error",
-            `Failed to fetch user data: ${errorMessage}. Please check your network connection and try again.`
-          );
-          setJsonInput("{}");
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [account?.bech32Address, queryClient]);
 
   // Add effect to fetch balance
   useEffect(() => {
@@ -121,12 +88,30 @@ export default function Index() {
 
   // Effect to handle account changes
   useEffect(() => {
-    if (account?.bech32Address) {
-      setShowUpdateJsonForm(true);
-      setActiveView("updateJson");
-      clearResults();
-    }
-  }, [account?.bech32Address]);
+    const initializeUserData = async () => {
+      if (account?.bech32Address && queryClient) {
+        setShowUpdateJsonForm(true);
+        setActiveView("updateJson");
+        clearResults();
+        
+        // Fetch user's current value on login
+        try {
+          const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
+            get_value_by_user: { address: account.bech32Address }
+          });
+          
+          if (response && response !== null && response !== "") {
+            setJsonInput(response);
+          }
+        } catch (error) {
+          // User has no value stored yet, which is fine - don't show error
+          console.log("No existing value for user");
+        }
+      }
+    };
+    
+    initializeUserData();
+  }, [account?.bech32Address, queryClient]);
 
   // Query functions
   const getUsers = async () => {
@@ -139,7 +124,13 @@ export default function Index() {
     try {
       if (!queryClient) throw new Error("Query client is not defined");
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { get_users: {} });
-      setQueryResult({ users: response });
+      
+      // Handle empty user list
+      if (!response || response.length === 0) {
+        setQueryResult({ users: [] });
+      } else {
+        setQueryResult({ users: response });
+      }
     } catch (error) {
       Alert.alert("Error", "Error querying users");
     } finally {
@@ -158,7 +149,13 @@ export default function Index() {
     try {
       if (!queryClient) throw new Error("Query client is not defined");
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { get_map: {} });
-      setQueryResult({ map: response });
+      
+      // Handle empty map
+      if (!response || response.length === 0) {
+        setQueryResult({ map: [] });
+      } else {
+        setQueryResult({ map: response });
+      }
     } catch (error) {
       Alert.alert("Error", "Error querying map");
     } finally {
@@ -179,10 +176,22 @@ export default function Index() {
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { 
         get_value_by_user: { address } 
       });
-      setQueryResult({ value: response });
+      
+      // Handle case where user has no value stored
+      if (!response || response === null || response === "") {
+        setQueryResult({ value: null });
+      } else {
+        setQueryResult({ value: response });
+      }
       setSelectedAddress(address);
     } catch (error) {
-      Alert.alert("Error", "Error querying value");
+      // Handle specific error when user has no value
+      if (error.message && error.message.includes("No value found")) {
+        setQueryResult({ value: null });
+        setSelectedAddress(address);
+      } else {
+        Alert.alert("Error", "Error querying value");
+      }
     } finally {
       setLoading(false);
       setIsOperationInProgress(false);
@@ -190,19 +199,41 @@ export default function Index() {
   };
 
   const validateJson = (jsonString: string): boolean => {
+    // Allow empty string without showing error
+    if (!jsonString.trim()) {
+      setJsonError("");
+      return false;
+    }
+    
     try {
-      JSON.parse(jsonString);
+      // Replace smart quotes with regular quotes before parsing
+      const normalizedJson = jsonString
+        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
+        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
+      
+      JSON.parse(normalizedJson);
       setJsonError("");
       return true;
     } catch (error) {
-      setJsonError("Invalid JSON format");
+      // Provide more specific error message
+      const hasSmartQuotes = /[\u201C\u201D\u2018\u2019]/.test(jsonString);
+      if (hasSmartQuotes) {
+        setJsonError("Invalid JSON format - check your quotes");
+      } else {
+        setJsonError("Invalid JSON format");
+      }
       return false;
     }
   };
 
   const formatJson = (jsonString: string): string => {
     try {
-      const parsed = JSON.parse(jsonString);
+      // Replace smart quotes with regular quotes before parsing
+      const normalizedJson = jsonString
+        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
+        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
+      
+      const parsed = JSON.parse(normalizedJson);
       return JSON.stringify(parsed, null, 2);
     } catch (error) {
       return jsonString;
@@ -225,20 +256,15 @@ export default function Index() {
     setIsTransactionPending(true);
     try {
       if (!client || !account) throw new Error("Client or account not defined");
-      
-      // Check balance before proceeding
-      const currentBalance = await queryClient?.getBalance(account.bech32Address, "uxion");
-      if (!currentBalance || Number(currentBalance.amount) < 184) {
-        Alert.alert(
-          "Insufficient Funds",
-          `You need at least 0.000184 XION to execute this transaction.\nYour current balance: ${Number(currentBalance?.amount || 0) / 1000000} XION`
-        );
-        return;
-      }
 
+      // Normalize the JSON before sending
+      const normalizedJson = jsonInput
+        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
+        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
+      
       const msg = {
         update: {
-          value: jsonInput
+          value: normalizedJson
         }
       };
 
@@ -279,18 +305,10 @@ export default function Index() {
       console.error("Error executing transaction:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
       
-      // Handle specific error cases
-      if (errorMessage.includes("insufficient funds")) {
-        Alert.alert(
-          "Insufficient Funds",
-          "You don't have enough XION to cover the transaction fees. Please ensure you have at least 0.000184 XION in your account."
-        );
-      } else {
-        Alert.alert(
-          "Error",
-          `Failed to update JSON data: ${errorMessage}. Please check your network connection and try again.`
-        );
-      }
+      Alert.alert(
+        "Error",
+        `Failed to update JSON data: ${errorMessage}. Please check your network connection and try again.`
+      );
     } finally {
       setLoading(false);
       setIsOperationInProgress(false);
@@ -430,7 +448,16 @@ export default function Index() {
                   value={jsonInput}
                   onChangeText={(text) => {
                     setJsonInput(text);
-                    validateJson(text);
+                    // Clear error when user types
+                    if (jsonError) {
+                      setJsonError("");
+                    }
+                  }}
+                  onBlur={() => {
+                    // Validate only when user leaves the field
+                    if (jsonInput.trim()) {
+                      validateJson(jsonInput);
+                    }
                   }}
                   placeholder="Enter JSON data..."
                   placeholderTextColor="#666"
@@ -462,39 +489,59 @@ export default function Index() {
             {activeView === "users" && queryResult.users && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Users:</Text>
-                {queryResult.users.map((user, index) => (
-                  <View key={index} style={styles.userRow}>
-                    <Text style={styles.userAddress}>{user}</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        getValueByUser(user);
-                        setActiveView("value");
-                      }}
-                      style={styles.smallButton}
-                    >
-                      <Text style={styles.buttonText}>View Value</Text>
-                    </TouchableOpacity>
+                {queryResult.users.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No users have stored data yet.</Text>
+                    <Text style={styles.emptyStateSubText}>Be the first to add your data!</Text>
                   </View>
-                ))}
+                ) : (
+                  queryResult.users.map((user, index) => (
+                    <View key={index} style={styles.userRow}>
+                      <Text style={styles.userAddress}>{user}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          getValueByUser(user);
+                          setActiveView("value");
+                        }}
+                        style={styles.smallButton}
+                      >
+                        <Text style={styles.buttonText}>View Value</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
-            {activeView === "value" && queryResult.value && (
+            {activeView === "value" && queryResult.hasOwnProperty('value') && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Value for {selectedAddress}:</Text>
-                <Text style={styles.resultText}>{queryResult.value}</Text>
+                {queryResult.value === null ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No data stored for this user.</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.resultText}>{queryResult.value}</Text>
+                )}
               </View>
             )}
 
             {activeView === "map" && queryResult.map && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Map Contents:</Text>
-                {queryResult.map.map(([address, value], index) => (
-                  <View key={index} style={styles.mapItem}>
-                    <Text style={styles.mapAddress}>Address: {address}</Text>
-                    <Text style={styles.mapValue}>Value: {value}</Text>
+                {queryResult.map.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>The user map is empty.</Text>
+                    <Text style={styles.emptyStateSubText}>No data has been stored yet.</Text>
                   </View>
-                ))}
+                ) : (
+                  queryResult.map.map(([address, value], index) => (
+                    <View key={index} style={styles.mapItem}>
+                      <Text style={styles.mapAddress}>Address: {address}</Text>
+                      <Text style={styles.mapValue}>Value: {value}</Text>
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
@@ -728,5 +775,18 @@ const styles = StyleSheet.create({
     backgroundColor: '#dc3545',
     width: '100%',
     maxWidth: '100%',
+  },
+  emptyState: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  emptyStateSubText: {
+    fontSize: 14,
+    color: '#888',
   },
 });
