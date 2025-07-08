@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
-import { View, StyleSheet, Text, TouchableOpacity, Alert, TextInput, ScrollView, Clipboard, Linking } from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ScrollView, Clipboard, Linking } from "react-native";
 import {
   useAbstraxionAccount,
   useAbstraxionSigningClient,
   useAbstraxionClient,
 } from "@burnt-labs/abstraxion-react-native";
 import type { ExecuteResult } from "@cosmjs/cosmwasm-stargate";
+import { JSONInput } from "../../components/JSONInput";
 
 if (!process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS) {
   throw new Error("EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS is not set in your environment file");
@@ -206,34 +207,18 @@ export default function Index() {
     }
     
     try {
-      // Replace smart quotes with regular quotes before parsing
-      const normalizedJson = jsonString
-        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
-        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
-      
-      JSON.parse(normalizedJson);
+      JSON.parse(jsonString);
       setJsonError("");
       return true;
     } catch (error) {
-      // Provide more specific error message
-      const hasSmartQuotes = /[\u201C\u201D\u2018\u2019]/.test(jsonString);
-      if (hasSmartQuotes) {
-        setJsonError("Invalid JSON format - check your quotes");
-      } else {
-        setJsonError("Invalid JSON format");
-      }
+      setJsonError("Invalid JSON format");
       return false;
     }
   };
 
   const formatJson = (jsonString: string): string => {
     try {
-      // Replace smart quotes with regular quotes before parsing
-      const normalizedJson = jsonString
-        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
-        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
-      
-      const parsed = JSON.parse(normalizedJson);
+      const parsed = JSON.parse(jsonString);
       return JSON.stringify(parsed, null, 2);
     } catch (error) {
       return jsonString;
@@ -257,14 +242,9 @@ export default function Index() {
     try {
       if (!client || !account) throw new Error("Client or account not defined");
 
-      // Normalize the JSON before sending
-      const normalizedJson = jsonInput
-        .replace(/[\u201C\u201D]/g, '"')  // Replace smart double quotes
-        .replace(/[\u2018\u2019]/g, "'");  // Replace smart single quotes
-      
       const msg = {
         update: {
-          value: normalizedJson
+          value: jsonInput
         }
       };
 
@@ -443,29 +423,21 @@ export default function Index() {
 
             {showUpdateJsonForm && account?.bech32Address && (
               <View style={styles.formSection}>
-                <TextInput
-                  style={[styles.jsonInput, jsonError ? styles.errorInput : null]}
+                <JSONInput
+                  style={styles.jsonInput}
                   value={jsonInput}
-                  onChangeText={(text) => {
-                    setJsonInput(text);
-                    // Clear error when user types
-                    if (jsonError) {
+                  onChangeText={setJsonInput}
+                  onValidationChange={(isValid) => {
+                    if (!isValid && jsonInput.trim()) {
+                      setJsonError("Invalid JSON format");
+                    } else {
                       setJsonError("");
                     }
                   }}
-                  onBlur={() => {
-                    // Validate only when user leaves the field
-                    if (jsonInput.trim()) {
-                      validateJson(jsonInput);
-                    }
-                  }}
+                  error={jsonError}
                   placeholder="Enter JSON data..."
                   placeholderTextColor="#666"
-                  multiline
                 />
-                {jsonError ? (
-                  <Text style={styles.errorText}>{jsonError}</Text>
-                ) : null}
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     onPress={updateValue}
