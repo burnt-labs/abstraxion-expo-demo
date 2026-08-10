@@ -317,6 +317,13 @@ export default function Index() {
     >
       <Text style={styles.title}>User Map Dapp</Text>
 
+      <View style={styles.descriptionContainer}>
+        <Text style={styles.descriptionText}>
+          This dapp allows you to store and retrieve JSON data on the Xion blockchain. 
+          Connect your wallet to start managing your data with zero-knowledge privacy.
+        </Text>
+      </View>
+
       {!isConnected ? (
         <View style={styles.connectButtonContainer}>
           <TouchableOpacity
@@ -353,6 +360,16 @@ export default function Index() {
               <Text style={styles.buttonText}>Logout</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Status Indicator */}
+          {(loading || isOperationInProgress) && (
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusTitle}>Status:</Text>
+              <Text style={styles.statusText}>
+                {isTransactionPending ? "Submitting transaction..." : "Processing..."}
+              </Text>
+            </View>
+          )}
 
           {/* Row 2: Menu Buttons */}
           <View style={styles.menuContainer}>
@@ -526,7 +543,10 @@ export default function Index() {
 
             {executeResult && (
               <View style={styles.resultCard}>
-                <Text style={styles.resultTitle}>Transaction Details:</Text>
+                <View style={styles.successHeader}>
+                  <Text style={styles.successIcon}>✓</Text>
+                  <Text style={styles.resultTitle}>Transaction Successful</Text>
+                </View>
                 <Text style={styles.resultText}>
                   Transaction Hash: {executeResult.transactionHash}
                 </Text>
@@ -553,7 +573,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#000000",
   },
   contentContainer: {
     padding: 20,
@@ -564,49 +584,64 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
-    color: "#333",
+    color: "#ffffff",
     textAlign: "center",
+  },
+  descriptionContainer: {
+    backgroundColor: "#111111",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: "#cccccc",
+    lineHeight: 20,
   },
   mainContainer: {
     flex: 1,
     gap: 20,
   },
   accountInfoContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#333333",
   },
   accountLabel: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 8,
   },
   addressContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#000000",
     padding: 10,
     borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#333333",
   },
   addressText: {
     flex: 1,
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginRight: 10,
   },
   copyButton: {
-    backgroundColor: "#2196F3",
+    backgroundColor: "#ffffff",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
   },
   copyButtonText: {
-    color: "#fff",
+    color: "#000000",
     fontSize: 12,
     fontWeight: "500",
   },
@@ -618,12 +653,17 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 15,
-    borderRadius: 5,
-    backgroundColor: "#2196F3",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
     alignItems: "center",
     flex: 1,
     minWidth: 120,
     maxWidth: '48%',
+  },
+  buttonText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "500",
   },
   resultsContainer: {
     flex: 1,
@@ -635,24 +675,25 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 5,
+    fontWeight: "bold",
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
-    color: "#000",
+    borderColor: "#333333",
+    color: "#ffffff",
   },
   jsonInput: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
-    color: "#000",
+    borderColor: "#333333",
+    color: "#ffffff",
     minHeight: 200,
     textAlignVertical: "top",
   },
@@ -669,23 +710,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   resultCard: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 15,
     borderRadius: 10,
     marginTop: 10,
-    borderWidth: 2,
-    borderColor: "#2196F3",
+    borderWidth: 1,
+    borderColor: "#333333",
     marginBottom: 10,
   },
   resultTitle: {
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 10,
-    color: "#333",
+    color: "#ffffff",
   },
   resultText: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginBottom: 5,
   },
   userRow: {
@@ -697,34 +738,35 @@ const styles = StyleSheet.create({
   userAddress: {
     flex: 1,
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
   },
   smallButton: {
     padding: 8,
-    borderRadius: 5,
-    backgroundColor: "#2196F3",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
     marginLeft: 10,
   },
   mapItem: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
+    borderColor: "#333333",
+    borderRadius: 8,
     padding: 10,
     marginBottom: 10,
+    backgroundColor: "#000000",
   },
   mapAddress: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 5,
   },
   mapValue: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
   },
   balanceText: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginTop: 8,
     textAlign: "right",
   },
@@ -740,18 +782,18 @@ const styles = StyleSheet.create({
   linkButton: {
     marginTop: 10,
     padding: 10,
-    backgroundColor: '#2196F3',
-    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
     alignItems: 'center',
   },
   linkText: {
-    color: '#fff',
+    color: '#000000',
     fontSize: 14,
     fontWeight: '500',
   },
   logoutButton: {
     marginTop: 15,
-    backgroundColor: '#dc3545',
+    backgroundColor: '#ff4444',
     width: '100%',
     maxWidth: '100%',
   },
@@ -761,16 +803,16 @@ const styles = StyleSheet.create({
   },
   emptyStateText: {
     fontSize: 16,
-    color: '#666',
+    color: '#cccccc',
     marginBottom: 8,
   },
   emptyStateSubText: {
     fontSize: 14,
-    color: '#888',
+    color: '#888888',
   },
   disabledButton: {
-    backgroundColor: '#ccc',
-    opacity: 0.7,
+    backgroundColor: '#333333',
+    opacity: 0.6,
   },
   loadingContainer: {
     flexDirection: 'row',
@@ -779,5 +821,35 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginLeft: 8,
+  },
+  successHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  successIcon: {
+    fontSize: 20,
+    color: '#4caf50',
+    marginRight: 8,
+    fontWeight: 'bold',
+  },
+  statusContainer: {
+    backgroundColor: "#111111",
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333333",
+    marginBottom: 10,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginBottom: 5,
+  },
+  statusText: {
+    fontSize: 14,
+    color: "#ffaa00",
+    fontWeight: "500",
   },
 });
