@@ -6,6 +6,7 @@ import {
   useAbstraxionClient,
 } from "@burnt-labs/abstraxion-react-native";
 import type { ExecuteResult } from "@cosmjs/cosmwasm-stargate";
+import { GithubProfile } from "@/components/GithubProfile";
 import { JSONInput } from "../../components/JSONInput";
 
 if (!process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS) {
@@ -22,13 +23,13 @@ type QueryResult = {
 // Add retry utility function
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const retryOperation = async <T>(
+const retryOperation = async <T,>(
   operation: () => Promise<T>,
   maxRetries = 3,
   delay = 1000
 ): Promise<T> => {
   let lastError: Error | null = null;
-  
+
   for (let i = 0; i < maxRetries; i++) {
     try {
       return await operation();
@@ -40,7 +41,7 @@ const retryOperation = async <T>(
       }
     }
   }
-  
+
   throw lastError;
 };
 
@@ -64,7 +65,6 @@ export default function Index() {
   const [addressInput, setAddressInput] = useState<string>("");
   const [activeView, setActiveView] = useState<string>("updateJson");
   const [balance, setBalance] = useState<string>("0");
-
 
   // Add effect to fetch balance
   useEffect(() => {
@@ -174,8 +174,8 @@ export default function Index() {
     setShowValueByUserForm(false);
     try {
       if (!queryClient) throw new Error("Query client is not defined");
-      const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { 
-        get_value_by_user: { address } 
+      const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
+        get_value_by_user: { address }
       });
       
       // Handle case where user has no value stored
@@ -241,7 +241,6 @@ export default function Index() {
     setIsTransactionPending(true);
     try {
       if (!client || !account) throw new Error("Client or account not defined");
-
       const msg = {
         update: {
           value: jsonInput
@@ -257,34 +256,33 @@ export default function Index() {
           "auto"
         );
       });
-      
+
       setExecuteResult(res);
       console.log("Transaction successful:", res);
-      
+
       // Show success confirmation
       Alert.alert(
         "Success",
         "Your JSON data has been successfully updated on the blockchain.",
         [{ text: "OK" }]
       );
-      
+
       // Refresh data with retry
       const updatedData = await retryOperation(async () => {
         if (!queryClient) throw new Error("Query client not available");
         return await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
-          get_value_by_user: { 
-            address: account.bech32Address 
+          get_value_by_user: {
+            address: account.bech32Address
           }
         });
       });
-      
+
       if (updatedData && typeof updatedData === 'string') {
         setJsonInput(updatedData);
       }
     } catch (error) {
       console.error("Error executing transaction:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-      
       Alert.alert(
         "Error",
         `Failed to update JSON data: ${errorMessage}. Please check your network connection and try again.`
@@ -311,11 +309,12 @@ export default function Index() {
   };
 
   return (
-    <ScrollView 
+    <ScrollView
       style={styles.container}
       contentContainerStyle={styles.contentContainer}
     >
       <Text style={styles.title}>User Map Dapp</Text>
+        <GithubProfile />
 
       <View style={styles.descriptionContainer}>
         <Text style={styles.descriptionText}>
