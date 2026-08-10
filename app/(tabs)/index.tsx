@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
-import { View, StyleSheet, Text, TouchableOpacity, Alert, TextInput, ScrollView, Clipboard, Linking } from "react-native";
+import { View, StyleSheet, Text, TouchableOpacity, Alert, ScrollView, Clipboard, Linking, TextInput, ActivityIndicator } from "react-native";
 import {
   useAbstraxionAccount,
   useAbstraxionSigningClient,
   useAbstraxionClient,
 } from "@burnt-labs/abstraxion-react-native";
 import type { ExecuteResult } from "@cosmjs/cosmwasm-stargate";
-import {GithubProfile} from "@/components/GithubProfile";
+import { GithubProfile } from "@/components/GithubProfile";
+import { JSONInput } from "../../components/JSONInput";
 
 if (!process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS) {
   throw new Error("EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS is not set in your environment file");
@@ -22,7 +23,7 @@ type QueryResult = {
 // Add retry utility function
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-const retryOperation = async <T>(
+const retryOperation = async <T,>(
   operation: () => Promise<T>,
   maxRetries = 3,
   delay = 1000
@@ -65,40 +66,6 @@ export default function Index() {
   const [activeView, setActiveView] = useState<string>("updateJson");
   const [balance, setBalance] = useState<string>("0");
 
-  // Add effect to fetch user's JSON data when they log in
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (account?.bech32Address && queryClient) {
-        try {
-          const response = await retryOperation(async () => {
-            return await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
-              get_value_by_user: {
-                address: account.bech32Address
-              }
-            });
-          });
-
-          if (response && typeof response === 'string') {
-            setJsonInput(response);
-          } else {
-            console.log("No existing data found for user");
-            setJsonInput("{}");
-          }
-        } catch (error) {
-          console.error("Error fetching user data:", error);
-          const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-          Alert.alert(
-            "Error",
-            `Failed to fetch user data: ${errorMessage}. Please check your network connection and try again.`
-          );
-          setJsonInput("{}");
-        }
-      }
-    };
-
-    fetchUserData();
-  }, [account?.bech32Address, queryClient]);
-
   // Add effect to fetch balance
   useEffect(() => {
     const fetchBalance = async () => {
@@ -122,12 +89,30 @@ export default function Index() {
 
   // Effect to handle account changes
   useEffect(() => {
-    if (account?.bech32Address) {
-      setShowUpdateJsonForm(true);
-      setActiveView("updateJson");
-      clearResults();
-    }
-  }, [account?.bech32Address]);
+    const initializeUserData = async () => {
+      if (account?.bech32Address && queryClient) {
+        setShowUpdateJsonForm(true);
+        setActiveView("updateJson");
+        clearResults();
+        
+        // Fetch user's current value on login
+        try {
+          const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
+            get_value_by_user: { address: account.bech32Address }
+          });
+          
+          if (response && response !== null && response !== "") {
+            setJsonInput(response);
+          }
+        } catch (error) {
+          // User has no value stored yet, which is fine - don't show error
+          console.log("No existing value for user");
+        }
+      }
+    };
+    
+    initializeUserData();
+  }, [account?.bech32Address, queryClient]);
 
   // Query functions
   const getUsers = async () => {
@@ -140,7 +125,13 @@ export default function Index() {
     try {
       if (!queryClient) throw new Error("Query client is not defined");
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { get_users: {} });
-      setQueryResult({ users: response });
+      
+      // Handle empty user list
+      if (!response || response.length === 0) {
+        setQueryResult({ users: [] });
+      } else {
+        setQueryResult({ users: response });
+      }
     } catch (error) {
       Alert.alert("Error", "Error querying users");
     } finally {
@@ -159,7 +150,13 @@ export default function Index() {
     try {
       if (!queryClient) throw new Error("Query client is not defined");
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, { get_map: {} });
-      setQueryResult({ map: response });
+      
+      // Handle empty map
+      if (!response || response.length === 0) {
+        setQueryResult({ map: [] });
+      } else {
+        setQueryResult({ map: response });
+      }
     } catch (error) {
       Alert.alert("Error", "Error querying map");
     } finally {
@@ -180,10 +177,22 @@ export default function Index() {
       const response = await queryClient.queryContractSmart(process.env.EXPO_PUBLIC_USER_MAP_CONTRACT_ADDRESS, {
         get_value_by_user: { address }
       });
-      setQueryResult({ value: response });
+      
+      // Handle case where user has no value stored
+      if (!response || response === null || response === "") {
+        setQueryResult({ value: null });
+      } else {
+        setQueryResult({ value: response });
+      }
       setSelectedAddress(address);
     } catch (error) {
-      Alert.alert("Error", "Error querying value");
+      // Handle specific error when user has no value
+      if (error.message && error.message.includes("No value found")) {
+        setQueryResult({ value: null });
+        setSelectedAddress(address);
+      } else {
+        Alert.alert("Error", "Error querying value");
+      }
     } finally {
       setLoading(false);
       setIsOperationInProgress(false);
@@ -191,6 +200,12 @@ export default function Index() {
   };
 
   const validateJson = (jsonString: string): boolean => {
+    // Allow empty string without showing error
+    if (!jsonString.trim()) {
+      setJsonError("");
+      return false;
+    }
+    
     try {
       JSON.parse(jsonString);
       setJsonError("");
@@ -226,17 +241,6 @@ export default function Index() {
     setIsTransactionPending(true);
     try {
       if (!client || !account) throw new Error("Client or account not defined");
-
-      // Check balance before proceeding
-      const currentBalance = await queryClient?.getBalance(account.bech32Address, "uxion");
-      if (!currentBalance || Number(currentBalance.amount) < 184) {
-        Alert.alert(
-          "Insufficient Funds",
-          `You need at least 0.000184 XION to execute this transaction.\nYour current balance: ${Number(currentBalance?.amount || 0) / 1000000} XION`
-        );
-        return;
-      }
-
       const msg = {
         update: {
           value: jsonInput
@@ -279,19 +283,10 @@ export default function Index() {
     } catch (error) {
       console.error("Error executing transaction:", error);
       const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
-
-      // Handle specific error cases
-      if (errorMessage.includes("insufficient funds")) {
-        Alert.alert(
-          "Insufficient Funds",
-          "You don't have enough XION to cover the transaction fees. Please ensure you have at least 0.000184 XION in your account."
-        );
-      } else {
-        Alert.alert(
-          "Error",
-          `Failed to update JSON data: ${errorMessage}. Please check your network connection and try again.`
-        );
-      }
+      Alert.alert(
+        "Error",
+        `Failed to update JSON data: ${errorMessage}. Please check your network connection and try again.`
+      );
     } finally {
       setLoading(false);
       setIsOperationInProgress(false);
@@ -320,6 +315,13 @@ export default function Index() {
     >
       <Text style={styles.title}>User Map Dapp</Text>
         <GithubProfile />
+
+      <View style={styles.descriptionContainer}>
+        <Text style={styles.descriptionText}>
+          This dapp allows you to store and retrieve JSON data on the Xion blockchain. 
+          Connect your wallet to start managing your data with zero-knowledge privacy.
+        </Text>
+      </View>
 
       {!isConnected ? (
         <View style={styles.connectButtonContainer}>
@@ -357,6 +359,16 @@ export default function Index() {
               <Text style={styles.buttonText}>Logout</Text>
             </TouchableOpacity>
           </View>
+
+          {/* Status Indicator */}
+          {(loading || isOperationInProgress) && (
+            <View style={styles.statusContainer}>
+              <Text style={styles.statusTitle}>Status:</Text>
+              <Text style={styles.statusText}>
+                {isTransactionPending ? "Submitting transaction..." : "Processing..."}
+              </Text>
+            </View>
+          )}
 
           {/* Row 2: Menu Buttons */}
           <View style={styles.menuContainer}>
@@ -427,27 +439,35 @@ export default function Index() {
 
             {showUpdateJsonForm && account?.bech32Address && (
               <View style={styles.formSection}>
-                <TextInput
-                  style={[styles.jsonInput, jsonError ? styles.errorInput : null]}
+                <JSONInput
+                  style={styles.jsonInput}
                   value={jsonInput}
-                  onChangeText={(text) => {
-                    setJsonInput(text);
-                    validateJson(text);
+                  onChangeText={setJsonInput}
+                  onValidationChange={(isValid) => {
+                    if (!isValid && jsonInput.trim()) {
+                      setJsonError("Invalid JSON format");
+                    } else {
+                      setJsonError("");
+                    }
                   }}
+                  error={jsonError}
                   placeholder="Enter JSON data..."
                   placeholderTextColor="#666"
-                  multiline
                 />
-                {jsonError ? (
-                  <Text style={styles.errorText}>{jsonError}</Text>
-                ) : null}
                 <View style={styles.buttonRow}>
                   <TouchableOpacity
                     onPress={updateValue}
                     style={[styles.menuButton, (loading || isOperationInProgress || !!jsonError || isTransactionPending) && styles.disabledButton]}
                     disabled={loading || isOperationInProgress || !!jsonError || isTransactionPending}
                   >
-                    <Text style={styles.buttonText}>Submit JSON</Text>
+                    {isTransactionPending ? (
+                      <View style={styles.loadingContainer}>
+                        <ActivityIndicator size="small" color="#fff" />
+                        <Text style={[styles.buttonText, styles.loadingText]}>Submitting...</Text>
+                      </View>
+                    ) : (
+                      <Text style={styles.buttonText}>Submit JSON</Text>
+                    )}
                   </TouchableOpacity>
                   <TouchableOpacity
                     onPress={handleFormatJson}
@@ -464,45 +484,68 @@ export default function Index() {
             {activeView === "users" && queryResult.users && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Users:</Text>
-                {queryResult.users.map((user, index) => (
-                  <View key={index} style={styles.userRow}>
-                    <Text style={styles.userAddress}>{user}</Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        getValueByUser(user);
-                        setActiveView("value");
-                      }}
-                      style={styles.smallButton}
-                    >
-                      <Text style={styles.buttonText}>View Value</Text>
-                    </TouchableOpacity>
+                {queryResult.users.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No users have stored data yet.</Text>
+                    <Text style={styles.emptyStateSubText}>Be the first to add your data!</Text>
                   </View>
-                ))}
+                ) : (
+                  queryResult.users.map((user, index) => (
+                    <View key={index} style={styles.userRow}>
+                      <Text style={styles.userAddress}>{user}</Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          getValueByUser(user);
+                          setActiveView("value");
+                        }}
+                        style={styles.smallButton}
+                      >
+                        <Text style={styles.buttonText}>View Value</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
-            {activeView === "value" && queryResult.value && (
+            {activeView === "value" && queryResult.hasOwnProperty('value') && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Value for {selectedAddress}:</Text>
-                <Text style={styles.resultText}>{queryResult.value}</Text>
+                {queryResult.value === null ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>No data stored for this user.</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.resultText}>{queryResult.value}</Text>
+                )}
               </View>
             )}
 
             {activeView === "map" && queryResult.map && (
               <View style={styles.resultCard}>
                 <Text style={styles.resultTitle}>Map Contents:</Text>
-                {queryResult.map.map(([address, value], index) => (
-                  <View key={index} style={styles.mapItem}>
-                    <Text style={styles.mapAddress}>Address: {address}</Text>
-                    <Text style={styles.mapValue}>Value: {value}</Text>
+                {queryResult.map.length === 0 ? (
+                  <View style={styles.emptyState}>
+                    <Text style={styles.emptyStateText}>The user map is empty.</Text>
+                    <Text style={styles.emptyStateSubText}>No data has been stored yet.</Text>
                   </View>
-                ))}
+                ) : (
+                  queryResult.map.map(([address, value], index) => (
+                    <View key={index} style={styles.mapItem}>
+                      <Text style={styles.mapAddress}>Address: {address}</Text>
+                      <Text style={styles.mapValue}>Value: {value}</Text>
+                    </View>
+                  ))
+                )}
               </View>
             )}
 
             {executeResult && (
               <View style={styles.resultCard}>
-                <Text style={styles.resultTitle}>Transaction Details:</Text>
+                <View style={styles.successHeader}>
+                  <Text style={styles.successIcon}>✓</Text>
+                  <Text style={styles.resultTitle}>Transaction Successful</Text>
+                </View>
                 <Text style={styles.resultText}>
                   Transaction Hash: {executeResult.transactionHash}
                 </Text>
@@ -529,7 +572,7 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f0f0f0",
+    backgroundColor: "#000000",
   },
   contentContainer: {
     padding: 20,
@@ -540,49 +583,64 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: "bold",
     marginBottom: 20,
-    color: "#333",
+    color: "#ffffff",
     textAlign: "center",
+  },
+  descriptionContainer: {
+    backgroundColor: "#111111",
+    padding: 15,
+    borderRadius: 10,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#333333",
+  },
+  descriptionText: {
+    fontSize: 14,
+    color: "#cccccc",
+    lineHeight: 20,
   },
   mainContainer: {
     flex: 1,
     gap: 20,
   },
   accountInfoContainer: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 15,
     borderRadius: 10,
     marginBottom: 20,
     borderWidth: 1,
-    borderColor: "#ddd",
+    borderColor: "#333333",
   },
   accountLabel: {
     fontSize: 16,
     fontWeight: "bold",
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 8,
   },
   addressContainer: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    backgroundColor: "#f5f5f5",
+    backgroundColor: "#000000",
     padding: 10,
     borderRadius: 5,
+    borderWidth: 1,
+    borderColor: "#333333",
   },
   addressText: {
     flex: 1,
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginRight: 10,
   },
   copyButton: {
-    backgroundColor: "#2196F3",
+    backgroundColor: "#ffffff",
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 4,
   },
   copyButtonText: {
-    color: "#fff",
+    color: "#000000",
     fontSize: 12,
     fontWeight: "500",
   },
@@ -594,12 +652,17 @@ const styles = StyleSheet.create({
   },
   menuButton: {
     padding: 15,
-    borderRadius: 5,
-    backgroundColor: "#2196F3",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
     alignItems: "center",
     flex: 1,
     minWidth: 120,
     maxWidth: '48%',
+  },
+  buttonText: {
+    color: "#000000",
+    fontSize: 16,
+    fontWeight: "500",
   },
   resultsContainer: {
     flex: 1,
@@ -611,24 +674,25 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 16,
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 5,
+    fontWeight: "bold",
   },
   input: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
-    color: "#000",
+    borderColor: "#333333",
+    color: "#ffffff",
   },
   jsonInput: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 10,
-    borderRadius: 5,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#ddd",
-    color: "#000",
+    borderColor: "#333333",
+    color: "#ffffff",
     minHeight: 200,
     textAlignVertical: "top",
   },
@@ -645,23 +709,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   resultCard: {
-    backgroundColor: "#fff",
+    backgroundColor: "#111111",
     padding: 15,
     borderRadius: 10,
     marginTop: 10,
-    borderWidth: 2,
-    borderColor: "#2196F3",
+    borderWidth: 1,
+    borderColor: "#333333",
     marginBottom: 10,
   },
   resultTitle: {
     fontSize: 18,
     fontWeight: "bold",
     marginBottom: 10,
-    color: "#333",
+    color: "#ffffff",
   },
   resultText: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginBottom: 5,
   },
   userRow: {
@@ -673,34 +737,35 @@ const styles = StyleSheet.create({
   userAddress: {
     flex: 1,
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
   },
   smallButton: {
     padding: 8,
-    borderRadius: 5,
-    backgroundColor: "#2196F3",
+    borderRadius: 8,
+    backgroundColor: "#ffffff",
     marginLeft: 10,
   },
   mapItem: {
     borderWidth: 1,
-    borderColor: "#ddd",
-    borderRadius: 5,
+    borderColor: "#333333",
+    borderRadius: 8,
     padding: 10,
     marginBottom: 10,
+    backgroundColor: "#000000",
   },
   mapAddress: {
     fontSize: 14,
     fontWeight: "bold",
-    color: "#333",
+    color: "#ffffff",
     marginBottom: 5,
   },
   mapValue: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
   },
   balanceText: {
     fontSize: 14,
-    color: "#666",
+    color: "#cccccc",
     marginTop: 8,
     textAlign: "right",
   },
@@ -716,19 +781,74 @@ const styles = StyleSheet.create({
   linkButton: {
     marginTop: 10,
     padding: 10,
-    backgroundColor: '#2196F3',
-    borderRadius: 5,
+    backgroundColor: '#ffffff',
+    borderRadius: 8,
     alignItems: 'center',
   },
   linkText: {
-    color: '#fff',
+    color: '#000000',
     fontSize: 14,
     fontWeight: '500',
   },
   logoutButton: {
     marginTop: 15,
-    backgroundColor: '#dc3545',
+    backgroundColor: '#ff4444',
     width: '100%',
     maxWidth: '100%',
+  },
+  emptyState: {
+    paddingVertical: 30,
+    alignItems: 'center',
+  },
+  emptyStateText: {
+    fontSize: 16,
+    color: '#cccccc',
+    marginBottom: 8,
+  },
+  emptyStateSubText: {
+    fontSize: 14,
+    color: '#888888',
+  },
+  disabledButton: {
+    backgroundColor: '#333333',
+    opacity: 0.6,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginLeft: 8,
+  },
+  successHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  successIcon: {
+    fontSize: 20,
+    color: '#4caf50',
+    marginRight: 8,
+    fontWeight: 'bold',
+  },
+  statusContainer: {
+    backgroundColor: "#111111",
+    padding: 15,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#333333",
+    marginBottom: 10,
+  },
+  statusTitle: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#ffffff",
+    marginBottom: 5,
+  },
+  statusText: {
+    fontSize: 14,
+    color: "#ffaa00",
+    fontWeight: "500",
   },
 });
